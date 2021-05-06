@@ -15,6 +15,7 @@ export default class LedgerBridge {
             if (e && e.data && e.data.target === 'LEDGER-IFRAME') {
                 const { action, params } = e.data
                 const replyAction = `${action}-reply`
+
                 switch (action) {
                     case 'ledger-unlock':
                         this.unlock(replyAction, params.hdPath)
@@ -25,6 +26,8 @@ export default class LedgerBridge {
                     case 'ledger-sign-personal-message':
                         this.signPersonalMessage(replyAction, params.hdPath, params.message)
                     break
+                    case 'ledger-sign-typed-data':
+                        this.signTypedData(replyAction, params.hdPath, params.domainSeparatorHex, params.hashStructMessageHex)
                     }
             }
         }, false)
@@ -105,6 +108,29 @@ export default class LedgerBridge {
             await this.makeApp()
             const res = await this.app.signPersonalMessage(hdPath, message)
 
+            this.sendMessageToExtension({
+                action: replyAction,
+                success: true,
+                payload: res,
+            })
+        } catch (err) {
+            const e = this.ledgerErrToMessage(err)
+            this.sendMessageToExtension({
+                action: replyAction,
+                success: false,
+                payload: { error: e.toString() },
+            })
+
+        } finally {
+            this.cleanUp()
+        }
+    }
+
+    async signTypedData (replyAction, hdPath, domainSeparatorHex, hashStructMessageHex) {
+        try {
+            await this.makeApp()
+            const res = await this.app.signEIP712HashedMessage(hdPath, domainSeparatorHex, hashStructMessageHex)
+            
             this.sendMessageToExtension({
                 action: replyAction,
                 success: true,
